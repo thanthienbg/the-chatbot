@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # API endpoint and payload for custom LLM
-VLLM_API_URL = "https://13b4-103-140-39-129.ngrok-free.app/v1/chat/completions"
+VLLM_API_URL = "https://b34e-103-140-39-129.ngrok-free.app/v1/chat/completions"
 payload = {
     "model": "Qwen/Qwen2.5-1.5B-Instruct",
     "messages": [],
@@ -16,40 +16,17 @@ payload = {
 
 def custom_llm_api_call(prompt):
     try:
-        if not VLLM_API_URL:
-            print("Error: VLLM_API_URL is not configured")
-            return "Xin lỗi, hệ thống chưa được cấu hình đúng. Vui lòng liên hệ quản trị viên."
-
         payload["messages"] = [{"role": "user", "content": prompt}]
-        
-        try:
-            response = requests.post(VLLM_API_URL, json=payload, timeout=30)
-            response.raise_for_status()
-        except requests.exceptions.Timeout:
-            print(f"Timeout error connecting to {VLLM_API_URL}")
-            return "Xin lỗi, máy chủ đang phản hồi chậm. Vui lòng thử lại sau ít phút."
-        except requests.exceptions.ConnectionError:
-            print(f"Connection error to {VLLM_API_URL}")
-            return "Xin lỗi, không thể kết nối với máy chủ. Vui lòng kiểm tra kết nối mạng và thử lại."
-        except requests.exceptions.HTTPError as e:
-            print(f"HTTP error occurred: {str(e)}")
-            return "Xin lỗi, đã xảy ra lỗi khi giao tiếp với máy chủ. Vui lòng thử lại sau."
-        
-        try:
-            response_data = response.json()
-        except ValueError as e:
-            print(f"Invalid JSON response: {str(e)}\nResponse content: {response.text}")
-            return "Xin lỗi, máy chủ trả về dữ liệu không hợp lệ. Vui lòng thử lại."
-
-        if not response_data.get("choices"):
-            print(f"No choices in response. Full response: {response_data}")
-            return "Xin lỗi, máy chủ không trả về câu trả lời hợp lệ. Vui lòng thử lại."
-
+        response = requests.post(VLLM_API_URL, json=payload, timeout=30)
+        response.raise_for_status()
+        response_data = response.json()
         return response_data.get("choices", [{}])[0].get("message", {}).get("content", "Xin lỗi, tôi không thể trả lời câu hỏi này.")
-
-    except Exception as e:
-        print(f"Unexpected error in custom_llm_api_call: {str(e)}")
-        return "Xin lỗi, đã xảy ra lỗi không mong muốn. Vui lòng thử lại sau."
+    except requests.exceptions.RequestException as e:
+        print(f"API request error: {str(e)}")
+        return "Xin lỗi, hiện tại tôi không thể kết nối với máy chủ. Vui lòng thử lại sau."
+    except (KeyError, ValueError, TypeError) as e:
+        print(f"Response parsing error: {str(e)}")
+        return "Xin lỗi, đã xảy ra lỗi khi xử lý câu trả lời. Vui lòng thử lại."
 
 
 # Adapter function for direct Q&A
