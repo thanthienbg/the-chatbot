@@ -1,6 +1,6 @@
 import json
 import re
-from app.utils import custom_llm_api_call
+from utils import custom_llm_api_call
 from fuzzywuzzy import fuzz
 from underthesea import pos_tag
 
