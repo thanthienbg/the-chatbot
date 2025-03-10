@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.models import QuestionRequest
-from app.agent import csv_processor
-from app.agent import search_relevant_entries, format_entries_info
+from models import QuestionRequest
+from agent import csv_processor
+from agent import search_relevant_entries, format_entries_info
 import uvicorn
 
 app = FastAPI(title="Question Answering API")
