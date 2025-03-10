@@ -6,7 +6,7 @@ from underthesea import pos_tag
 
 # Load the JSON data
 try:
-    with open('c:/Users/Than Thien/PycharmProjects/the-chatbot/data/buoihoc_full_data.json', 'r', encoding='utf-8') as f:
+    with open('data/buoihoc_full_data.json', 'r', encoding='utf-8') as f:
         data = json.load(f)
 except (FileNotFoundError, json.JSONDecodeError) as e:
     print(f"Error loading JSON data: {str(e)}")
