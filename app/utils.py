@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # API endpoint and payload for custom LLM
-VLLM_API_URL = "https://b34e-103-140-39-129.ngrok-free.app/v1/chat/completions"
+VLLM_API_URL = "https://13b4-103-140-39-129.ngrok-free.app/v1/chat/completions"
 payload = {
     "model": "Qwen/Qwen2.5-1.5B-Instruct",
     "messages": [],
