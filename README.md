@@ -35,6 +35,17 @@ response = requests.post(
 print(response.json())
 ```
 
+Gửi câu hỏi qua API endpoint `/ask_without_ai`:
+```python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/ask",
+    json={"question": "Câu hỏi của bạn"}
+)
+print(response.json())
+```
+
 ## Cấu trúc thư mục
 - `/app`: Mã nguồn chính
 - `/data`: Chứa dữ liệu CSV
