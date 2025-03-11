@@ -88,24 +88,22 @@ def search_relevant_entries(question: str):
     return [{field: entry.get(field, "") for field in info["fields"]} 
             for entry in matched_entries]
 
+
 def format_entries_info(relevant_entries=None):
     """Format entries information for context"""
     if relevant_entries:
-        formatted_entries = ""
-        for entry in relevant_entries:
-            formatted_entries += "\n".join(f"{field}: {value}" 
-                                        for field, value in entry.items())
-            formatted_entries += "\n---\n"
-        return f"Thông tin liên quan:\n{formatted_entries}"
-    
+        return {"Thông tin liên quan": relevant_entries}
+
     sample_entries = data[:3]
     fields = list(data[0].keys()) if data else []
-    formatted_sample = ""
-    for entry in sample_entries:
-        formatted_sample += "\n".join(f"{field}: {entry.get(field, '')}" 
-                                    for field in fields)
-        formatted_sample += "\n---\n"
-    return f"Các trường trong dữ liệu: {', '.join(fields)}\nDữ liệu mẫu:\n{formatted_sample}"
+    formatted_sample = [
+        {field: entry.get(field, "") for field in fields}
+        for entry in sample_entries
+    ]
+    return {
+        "Các trường trong dữ liệu": fields,
+        "Dữ liệu mẫu": formatted_sample
+    }
 
 
 def process_question(question: str) -> str:

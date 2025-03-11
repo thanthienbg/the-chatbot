@@ -54,7 +54,7 @@ async def ask_without_ai(question: QuestionRequest):
 
         # Format the retrieved entries for response
         response = format_entries_info(relevant_entries)
-        return {"answer": f"Với câu hỏi '{question.question}', chúng tôi có câu trả lời: {response}"}
+        return response
     except Exception as e:
         import traceback
         print(f"Unexpected error processing question without AI: {str(e)}\n{traceback.format_exc()}")
