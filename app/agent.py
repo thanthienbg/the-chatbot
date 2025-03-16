@@ -1,153 +1,162 @@
+import os
 import json
-import re
-from utils import custom_llm_api_call
-from fuzzywuzzy import fuzz
-from underthesea import pos_tag
+import google.generativeai as genai
+from dotenv import load_dotenv
+from pathlib import Path
 
-# Load the JSON data
+# Load environment variables from .env file
+env_path = Path('../.env')
+load_dotenv(dotenv_path=env_path)
+
+# Configure Gemini API
 try:
-    with open('../data/buoihoc_full_data.json', 'r', encoding='utf-8') as f:
-        data = json.load(f)
-except (FileNotFoundError, json.JSONDecodeError) as e:
-    print(f"Error loading JSON data: {str(e)}")
-    data = []
+    GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+    if not GOOGLE_API_KEY:
+        # Try to read directly from .env file if environment variable is not set
+        if env_path.exists():
+            with open(env_path, 'r') as f:
+                for line in f:
+                    if line.startswith('GOOGLE_API_KEY='):
+                        GOOGLE_API_KEY = line.split('=')[1].strip().strip("'").strip('"')
+                        break
+    
+    if not GOOGLE_API_KEY:
+        raise ValueError("GOOGLE_API_KEY not found in .env file. Please add GOOGLE_API_KEY=your_api_key to .env file")
+        
+    genai.configure(api_key=GOOGLE_API_KEY)
+    print("✅ Đã cấu hình Gemini API thành công")
+except Exception as e:
+    print(f"❌ Lỗi khi cấu hình Gemini API: {str(e)}")
     raise
 
-def preprocess_text(text):
-    """Normalize text and extract keywords using POS tagging"""
-    if not isinstance(text, str):
-        return ""
-    # Normalize text
-    text = text.lower().strip()
-    
-    # Use POS tagging to identify important words
-    tagged_words = pos_tag(text)
-    
-    # Filter for nouns (N, Np), verbs (V), and adjectives (A)
-    important_words = [word for word, tag in tagged_words 
-                      if tag.startswith(('N', 'V', 'A'))]
-    
-    # Join the important words back together
-    return ' '.join(important_words)
-
-def extract_info_from_question(question):
-    """Determine what information the question is targeting"""
-    question = question.lower()
-
-    # Map question keywords to JSON fields
-    field_mapping = {
-        "THỜI GIAN": ["khi nào", "thời gian", "ngày", "lúc nào", "hôm"],
-        "NỘI DUNG BUỔI HỌC": ["chủ đề", "nội dung", "học về gì", "học gì", "có gì"],
-        "LINK XEM LẠI VIDEO + TÀI LIỆU": ["xem lại", "link", "video", "live", "tài liệu"],
-        "GHI CHÚ": ["ghi chú", "lưu ý", "nhắc nhở", "note"]
-    }
-
-    # Check for date in question
-    date_match = re.search(r"\d{1,2}/\d{1,2}", question)
-
-    # Find which fields the question relates to
-    matched_fields = [field for field, keywords in field_mapping.items() 
-                     if any(word in question for word in keywords)]
-
-    return {
-        "date": date_match.group() if date_match else None,
-        "fields": matched_fields if matched_fields else list(field_mapping.keys())
-    }
-
-def search_relevant_entries(question: str):
-    """Find entries relevant to the question using POS tagging and fuzzy matching"""
-    # Extract important keywords from question using POS tagging
-    processed_question = preprocess_text(question)
-    
-    # Check for specific date in question
-    date_match = re.search(r"\d{1,2}/\d{1,2}(/\d{4})?|\d{4}/\d{1,2}/\d{1,2}", question)
-    if date_match:
-        date = date_match.group()
-        matched_entries = [entry for entry in data if date in entry.get("THỜI GIAN", "")]
-    else:
-        # Search for content matches using fuzzy matching on processed text
-        matched_entries = []
-        for entry in data:
-            # Process each field with POS tagging
-            content = preprocess_text(entry.get("NỘI DUNG BUỔI HỌC", ""))
-            link = preprocess_text(entry.get("LINK XEM LẠI VIDEO + TÀI LIỆU", ""))
-            note = preprocess_text(entry.get("GHI CHÚ", ""))
-            
-            # Use fuzzy matching with processed text
-            if (fuzz.partial_ratio(processed_question, content) > 70 or
-                fuzz.partial_ratio(processed_question, link) > 70 or
-                fuzz.partial_ratio(processed_question, note) > 70):
-                matched_entries.append(entry)
-    
-    # If no matches found, return empty list
-    if not matched_entries:
-        return []
-        
-    # Extract relevant fields based on question context
-    info = extract_info_from_question(question)
-    return [{field: entry.get(field, "") for field in info["fields"]} 
-            for entry in matched_entries]
-
-
-def format_entries_info(relevant_entries=None):
-    """Format entries information for context"""
-    if relevant_entries:
-        return {"Thông tin liên quan": relevant_entries}
-
-    sample_entries = data[:3]
-    fields = list(data[0].keys()) if data else []
-    formatted_sample = [
-        {field: entry.get(field, "") for field in fields}
-        for entry in sample_entries
-    ]
-    return {
-        "Các trường trong dữ liệu": fields,
-        "Dữ liệu mẫu": formatted_sample
-    }
-
-
-def process_question(question: str) -> str:
-    """Process a question about the JSON data and return an answer"""
-    # Search for relevant data first
-    relevant_entries = search_relevant_entries(question)
-
-    # Create a context-aware prompt
-    context = format_entries_info(relevant_entries)
-    prompt = f"""Dựa trên dữ liệu JSON sau:
-
-        {context}
-        
-        Vui lòng trả lời câu hỏi này: {question}
-        
-        Hãy đưa ra câu trả lời rõ ràng và ngắn gọn dựa trên dữ liệu được hiển thị ở trên.
-    """
-
-    # Get response from LLM
-    response = custom_llm_api_call(prompt)
-    if response == "404":
-        return context
-    return response
-
-
-# Initialize the JSON processor
-csv_processor = {
-    'process_question': process_question
-}
-
-if __name__ == "__main__":
-    # Test the function with a sample input
-    test_question = "Buổi học vào ngày 16/07 có link không?"
+def load_json_data():
+    """Load JSON data and return as formatted string"""
     try:
-        # Use data from the loaded JSON file instead of simulating sample data
-        # Use search_relevant_entries and display output
-        result = search_relevant_entries(test_question)
-        print("Search results:")
-        print(result)
+        # Read JSON file
+        with open('../data/data_normalized.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # Convert JSON to formatted string
+        data_str = "Dữ liệu các buổi học:\n\n"
+        for idx, lesson in enumerate(data, 1):
+            data_str += f"Buổi {idx}:\n"
+            for key, value in lesson.items():
+                data_str += f"{key}: {value or ''}\n"
+            data_str += "---\n"
+        
+        return data_str
+    except Exception as e:
+        print(f"❌ Lỗi khi đọc file JSON: {str(e)}")
+        return None
 
-        # Test process_question
-        response = process_question(test_question)
-        print("Process Question Response:")
-        print(response)
+def ask_gemini(question: str, data: str) -> str:
+    """Ask Gemini AI about the data"""
+    try:
+        # Initialize Gemini model
+        model = genai.GenerativeModel('gemini-1.5-flash-8b')
+        
+        # Prepare the prompt with context and question
+        prompt = f"""Dựa trên dữ liệu sau đây về các buổi học:
+    
+            {data}
+    
+            Hãy trả lời câu hỏi sau một cách chính xác và ngắn gọn: {question}
+    
+            ### Quy tắc trả lời:
+            - **Nếu ngày không hợp lệ** (ví dụ: 30/2, 31/4, hoặc ngày không tồn tại trong lịch), hãy trả lời: **"Buổi học không tồn tại."** 
+            - **Nếu ngày hợp lệ nhưng không có dữ liệu**, hãy trả lời: **"Tôi không tìm thấy thông tin về buổi học này trong dữ liệu."**
+            - **Nếu không tìm thấy thông tin chính xác**, có thể gợi ý buổi học gần nhất nhưng phải nói rõ: **"Không có dữ liệu cho ngày *ngày được hỏi*, bạn có thể quan tâm buổi học gần nhất vào ngày gần nhất."**
+            - **BẮT BUỘC phải kiểm tra thông tin ngày trong câu hỏi.**
+            - **Không tự tạo nội dung nếu dữ liệu không có thông tin.**
+            - **Câu trả lời phải ngắn gọn, súc tích, dễ hiểu.**
+            - **Trả lời bằng tiếng Việt.**
+    
+            ### Định dạng câu trả lời (nếu có dữ liệu):
+            ✅ **Nội dung buổi học**:   
+            📌 **Link xem lại**:
+            📄 **Tài liệu**: 
+            📝 **Ghi chú**: 
+    
+            Lưu ý: Không suy diễn hoặc bịa đặt thông tin ngoài dữ liệu đã cung cấp.
+        """
+
+        response = model.generate_content(prompt)
+        
+        if response.text:
+            return response.text.strip()
+        return "Xin lỗi, tôi không thể xử lý câu hỏi này."
 
     except Exception as e:
-        print(f"An error occurred during testing: {str(e)}")
+        print(f"❌ Lỗi khi gọi Gemini API: {str(e)}")
+        return f"Đã xảy ra lỗi khi xử lý câu hỏi: {str(e)}"
+
+def process_question(question: str) -> str:
+    """Process a question using Gemini API"""
+    # Load JSON data
+    data = load_json_data()
+    if not data:
+        return "Không thể tải dữ liệu JSON."
+    
+    # Ask Gemini about the data
+    response = ask_gemini(question, data)
+    return response
+
+def print_json_content():
+    """Print all content from JSON file"""
+    try:
+        # Read JSON file
+        with open('../data/data_normalized.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        print("\n📊 NỘI DUNG FILE JSON:")
+        print("="*100)
+        
+        # Print headers (assuming all objects have the same keys)
+        if data and len(data) > 0:
+            headers = data[0].keys()
+            header_str = " | ".join(f"{h:^20}" for h in headers)
+            print(header_str)
+            print("-"*len(header_str))
+            
+            # Print rows
+            for lesson in data:
+                row_str = " | ".join(f"{str(val or ''):^20}" for val in lesson.values())
+                print(row_str)
+                print("-"*len(header_str))
+        
+        print("="*100)
+        return True
+    except Exception as e:
+        print(f"❌ Lỗi khi đọc file JSON: {str(e)}")
+        return False
+
+if __name__ == "__main__":
+    def run_test(question: str) -> None:
+        """Run a single test question and display results"""
+        print("\n" + "="*80)
+        print(f"📝 Câu hỏi: {question}")
+        print("-"*80)
+        print("💡 Câu trả lời:")
+        response = process_question(question)
+        print(response)
+        print("="*80)
+
+    # Test cases covering different scenarios
+    test_cases = [
+        "Buổi học ngày 18/02 học về chủ đề gì?"
+    ]
+    
+    print("\n🔰 BẮT ĐẦU KIỂM TRA HỆ THỐNG HỎI ĐÁP")
+    print("Tổng số câu hỏi test:", len(test_cases))
+    
+    try:
+        for i, question in enumerate(test_cases, 1):
+            print(f"\n📊 Test #{i}/{len(test_cases)}")
+            run_test(question)
+                
+    except KeyboardInterrupt:
+        print("\n\n⚠️ Đã dừng kiểm tra theo yêu cầu người dùng")
+    except Exception as e:
+        print(f"\n❌ Lỗi trong quá trình kiểm tra: {str(e)}")
+    finally:
+        print("\n✅ HOÀN THÀNH KIỂM TRA")
